@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Early scaffold: `README.md` is empty, there are no tests or lint config yet, and `app/dependencies.py` is an empty file. `app/models/`, `app/routers/` and `app/services/` are empty directories. Update this file as real code lands.
+Auth is implemented (signup, login, refresh, me, logout) under `/auth`. `README.md` documents the add-on flow. No lint config yet.
 
 ## Stack and commands
 
 Python 3.14 project managed with `uv` (`pyproject.toml`, `uv.lock`). Dependencies: FastAPI, uvicorn, pydantic-settings, supabase.
 
 - Install deps: `uv sync`
-- Run the dev server (no entrypoint exists yet; once `app/main.py` defines `app`): `uv run uvicorn app.main:app --reload`
+- Run the dev server: `uv run uvicorn app.main:app --reload` (needs `.env`, see `.env.example`)
+- Run tests: `uv run pytest`; single test: `uv run pytest tests/test_auth.py::test_login_success`
 - Add a dependency: `uv add <package>`
 
-No test runner or linter is configured. If you add one (e.g. pytest, ruff), document the commands here, including how to run a single test.
+pytest is configured (`tests/`). No linter is configured yet.
 
 ## Architecture
 
@@ -26,3 +27,7 @@ The intended layout is a layered FastAPI app under `app/`:
 - `dependencies.py`: shared FastAPI dependencies (e.g. the Supabase client, settings)
 
 Configuration is expected to come from environment variables via pydantic-settings, loaded from a git-ignored `.env` at the repo root. Supabase is the backend data store.
+
+## Auth
+
+The Anki add-on logs in with the email/password from its config via `POST /auth/login` and sends `Authorization: Bearer <access_token>` on every other call. `AuthService` (`app/services/auth.py`) wraps Supabase Auth; a new Supabase client is created per request because the client keeps session state in memory. Protect routes with `CurrentUser`; use `UserClient` (from `app/dependencies.py`) for Supabase queries so RLS applies as that user. Only the anon key is used; never add the service-role key. Tests override `get_auth_service` with a fake, so they need no Supabase project.
