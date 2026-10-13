@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Auth is implemented (signup, login, refresh, me, logout) under `/auth`. `README.md` documents the add-on flow. No lint config yet.
+Auth is implemented (signup, login, refresh, me, logout) under `/auth`. Daily review totals live under `/reviews` (table in `supabase/migrations/`, RLS-protected). `README.md` documents the add-on flow. No lint config yet.
 
 ## Stack and commands
 
