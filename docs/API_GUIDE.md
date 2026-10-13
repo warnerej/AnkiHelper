@@ -14,11 +14,11 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `POST /auth/refresh` | no | `{refresh_token}` | new `{access_token, refresh_token, token_type, expires_in}` |
 | `GET /auth/me` | yes | | `{id, email}` |
 | `POST /auth/logout` | yes | | 204, ends this session |
-| `PUT /reviews/daily` | yes | `{total_reviews, study_date}` | the saved row (below) |
+| `PUT /reviews/daily` | yes | `{total_reviews, study_date, retention?, study_minutes?}` | the saved row (below) |
 | `GET /reviews/daily` | yes | query: `start`, `end` (ISO dates, optional), `limit` (1-365, default 90) | list of rows, newest first |
 | `GET /reviews/daily/{study_date}` | yes | | one row, or 404 |
 
-A review row is `{study_date: "YYYY-MM-DD", total_reviews: int, updated_at: ISO datetime}`.
+A review row is `{study_date: "YYYY-MM-DD", total_reviews: int, retention: float | null, study_minutes: float | null, updated_at: ISO datetime}`. `retention` is a percent (0-100) and `study_minutes` is the minutes studied that day (0-1440). Both are optional on PUT; if omitted, any stored value is kept (null if never sent). Send them as running values for the day, like `total_reviews`.
 
 ## Auth flow for the client
 
@@ -43,9 +43,9 @@ Example:
 ```
 PUT /reviews/daily
 Authorization: Bearer <access_token>
-{"total_reviews": 42, "study_date": "2026-01-31"}
+{"total_reviews": 42, "study_date": "2026-01-31", "retention": 87.5, "study_minutes": 31.5}
 
-200 {"study_date": "2026-01-31", "total_reviews": 42, "updated_at": "2026-01-31T21:04:11.2+00:00"}
+200 {"study_date": "2026-01-31", "total_reviews": 42, "retention": 87.5, "study_minutes": 31.5, "updated_at": "2026-01-31T21:04:11.2+00:00"}
 ```
 
 ## Error handling

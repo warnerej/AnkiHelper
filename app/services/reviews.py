@@ -4,9 +4,9 @@ from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from supabase import Client
 
-from app.models.reviews import DailyReview
+from app.models.reviews import DailyReview, DailyReviewUpsert
 
-COLUMNS = "study_date,total_reviews,updated_at"
+COLUMNS = "study_date,total_reviews,retention,study_minutes,updated_at"
 
 
 def _db_error(e: APIError) -> HTTPException:
@@ -19,11 +19,16 @@ class ReviewService:
     def __init__(self, client: Client):
         self._table = client.table("daily_reviews")
 
-    def upsert(self, study_date: date, total_reviews: int) -> DailyReview:
+    def upsert(self, body: DailyReviewUpsert) -> DailyReview:
         row = {
-            "study_date": study_date.isoformat(),
-            "total_reviews": total_reviews,
+            "study_date": body.study_date.isoformat(),
+            "total_reviews": body.total_reviews,
         }
+        # Only send optional stats that were provided, so a partial PUT keeps stored values.
+        if body.retention is not None:
+            row["retention"] = body.retention
+        if body.study_minutes is not None:
+            row["study_minutes"] = body.study_minutes
         try:
             # user_id is omitted so the column default (auth.uid()) fills it.
             res = (

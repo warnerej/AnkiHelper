@@ -11,7 +11,7 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 @router.put("/daily", response_model=DailyReview)
 def upsert_daily(body: DailyReviewUpsert, user: CurrentUser, reviews: ReviewServiceDep):
-    return reviews.upsert(body.study_date, body.total_reviews)
+    return reviews.upsert(body)
 
 
 @router.get("/daily", response_model=list[DailyReview])

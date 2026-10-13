@@ -24,9 +24,19 @@ class FakeReviews:
     def __init__(self):
         self.rows = {}
 
-    def upsert(self, d, total):
-        self.rows[d] = DailyReview(study_date=d, total_reviews=total, updated_at=NOW)
-        return self.rows[d]
+    def upsert(self, body):
+        old = self.rows.get(body.study_date)
+        # Mirror the real service: omitted optional stats keep their stored value.
+        self.rows[body.study_date] = DailyReview(
+            study_date=body.study_date,
+            total_reviews=body.total_reviews,
+            retention=body.retention if body.retention is not None else old and old.retention,
+            study_minutes=(
+                body.study_minutes if body.study_minutes is not None else old and old.study_minutes
+            ),
+            updated_at=NOW,
+        )
+        return self.rows[body.study_date]
 
     def list(self, start, end, limit):
         return sorted(self.rows.values(), key=lambda r: r.study_date, reverse=True)
@@ -81,6 +91,33 @@ def test_put_validates_input(client):
     assert client.put("/reviews/daily", json={**BODY, "total_reviews": -1}, headers=AUTH).status_code == 422
     assert client.put("/reviews/daily", json={**BODY, "study_date": "not-a-date"}, headers=AUTH).status_code == 422
     assert client.put("/reviews/daily", json={"total_reviews": 10}, headers=AUTH).status_code == 422
+
+
+def test_put_with_retention_and_minutes(client):
+    r = client.put("/reviews/daily", json={**BODY, "retention": 87.5, "study_minutes": 32.5}, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["retention"] == 87.5
+    assert r.json()["study_minutes"] == 32.5
+
+
+def test_put_without_stats_returns_null(client):
+    r = client.put("/reviews/daily", json=BODY, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["retention"] is None
+    assert r.json()["study_minutes"] is None
+
+
+def test_put_omitting_stats_keeps_stored_values(client):
+    client.put("/reviews/daily", json={**BODY, "retention": 90, "study_minutes": 15}, headers=AUTH)
+    r = client.put("/reviews/daily", json={**BODY, "total_reviews": 30}, headers=AUTH)
+    assert r.json()["total_reviews"] == 30
+    assert r.json()["retention"] == 90
+    assert r.json()["study_minutes"] == 15
+
+
+def test_put_validates_stats(client):
+    for extra in ({"retention": 101}, {"retention": -1}, {"study_minutes": -5}, {"study_minutes": 1441}):
+        assert client.put("/reviews/daily", json={**BODY, **extra}, headers=AUTH).status_code == 422
 
 
 def test_get_one_and_404(client):

@@ -23,11 +23,11 @@ uv run pytest
 
 ## Daily reviews API
 
-Requires the Bearer token. One row per user per study day; the add-on sends the study date, so it decides when a day rolls over. Apply `supabase/migrations/0001_daily_reviews.sql` in Supabase first (it enables RLS).
+Requires the Bearer token. One row per user per study day; the add-on sends the study date, so it decides when a day rolls over. Apply `supabase/migrations/0001_daily_reviews.sql` and `0002_daily_review_stats.sql` in Supabase first (0001 enables RLS).
 
 | Endpoint | Body / query | Result |
 | --- | --- | --- |
-| `PUT /reviews/daily` | `{total_reviews, study_date}` (ISO date, e.g. `2026-01-31`) | inserts that day's row or overwrites its total |
+| `PUT /reviews/daily` | `{total_reviews, study_date, retention?, study_minutes?}` (ISO date, e.g. `2026-01-31`; `retention` is a percent 0-100; `study_minutes` is 0-1440) | inserts that day's row or overwrites its values; omitted optional fields keep their stored value |
 | `GET /reviews/daily` | `start`, `end` (dates), `limit` (1-365, default 90) | your rows, newest first |
 | `GET /reviews/daily/{date}` | | that day's row, or 404 |
 
