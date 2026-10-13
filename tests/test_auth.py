@@ -9,6 +9,7 @@ from app.models.auth import SignupResponse, TokenResponse, UserResponse
 TOKENS = TokenResponse(access_token="acc", refresh_token="ref", expires_in=3600)
 USER = UserResponse(id="u1", email="a@example.com")
 CREDS = {"email": "a@example.com", "password": "password123"}
+SIGNUP = {**CREDS, "username": "Alice_1"}
 
 
 def _401():
@@ -17,8 +18,13 @@ def _401():
 
 class FakeAuth:
     confirm = False
+    taken = False
+    signed_up_as = None
 
-    def sign_up(self, email, password):
+    def sign_up(self, email, password, username):
+        if self.taken:
+            raise HTTPException(409, "Username already taken")
+        self.signed_up_as = username
         if self.confirm:
             return SignupResponse(user=USER, confirmation_required=True)
         return SignupResponse(user=USER, tokens=TOKENS)
@@ -72,18 +78,30 @@ def test_login_validates_input(client):
     assert client.post("/auth/login", json={"email": "bad", "password": "x"}).status_code == 422
 
 
-def test_signup(client):
-    r = client.post("/auth/signup", json=CREDS)
+def test_signup(client, fake):
+    r = client.post("/auth/signup", json=SIGNUP)
     assert r.status_code == 201
     assert r.json()["tokens"]["access_token"] == "acc"
     assert r.json()["confirmation_required"] is False
+    assert fake.signed_up_as == "alice_1"
 
 
 def test_signup_confirmation_required(client, fake):
     fake.confirm = True
-    body = client.post("/auth/signup", json=CREDS).json()
+    body = client.post("/auth/signup", json=SIGNUP).json()
     assert body["tokens"] is None
     assert body["confirmation_required"] is True
+
+
+def test_signup_requires_valid_username(client):
+    assert client.post("/auth/signup", json=CREDS).status_code == 422
+    for bad in ("ab", "x" * 21, "has space", "bad-char"):
+        assert client.post("/auth/signup", json={**CREDS, "username": bad}).status_code == 422
+
+
+def test_signup_username_taken(client, fake):
+    fake.taken = True
+    assert client.post("/auth/signup", json=SIGNUP).status_code == 409
 
 
 def test_refresh(client):

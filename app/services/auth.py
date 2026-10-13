@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from postgrest.exceptions import APIError
 from supabase import Client
 from supabase_auth.errors import AuthApiError, AuthError
 
@@ -30,14 +31,35 @@ class AuthService:
     since the client keeps the signed-in session in memory."""
 
     def __init__(self, client: Client):
+        self._client = client
         self._auth = client.auth
 
-    def sign_up(self, email: str, password: str) -> SignupResponse:
+    def _username_taken(self) -> HTTPException:
+        return HTTPException(status.HTTP_409_CONFLICT, "Username already taken")
+
+    def sign_up(self, email: str, password: str, username: str) -> SignupResponse:
         try:
-            res = self._auth.sign_up({"email": email, "password": password})
+            available = self._client.rpc("username_available", {"p_username": username}).execute()
+        except APIError as e:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error") from e
+        if not available.data:
+            raise self._username_taken()
+        try:
+            res = self._auth.sign_up(
+                {
+                    "email": email,
+                    "password": password,
+                    # The on_auth_user_created trigger turns this into a profile row.
+                    "options": {"data": {"username": username}},
+                }
+            )
         except AuthApiError as e:
-            code = 409 if e.code == "user_already_exists" else 400
-            raise HTTPException(code, e.message) from e
+            if e.code == "user_already_exists":
+                raise HTTPException(status.HTTP_409_CONFLICT, e.message) from e
+            # Lost a race for the username: the trigger's unique index rejected the insert.
+            if e.code == "unexpected_failure" and "profiles" in (e.message or ""):
+                raise self._username_taken() from e
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, e.message) from e
         if res.user is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sign up failed")
         return SignupResponse(

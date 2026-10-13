@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Auth is implemented (signup, login, refresh, me, logout) under `/auth`. Daily review totals live under `/reviews` (table in `supabase/migrations/`, RLS-protected). `README.md` documents the add-on flow. No lint config yet.
+Auth is implemented (signup, login, refresh, me, logout) under `/auth`. Daily review totals live under `/reviews` (table in `supabase/migrations/`, RLS-protected). Signup requires a username, stored in `profiles` (created by a DB trigger); `GET /profiles/{username}/reviews` returns that user's last 30 days via a security-definer SQL function, so `daily_reviews` RLS stays own-rows-only. `README.md` documents the add-on flow. No lint config yet.
 
 ## Stack and commands
 

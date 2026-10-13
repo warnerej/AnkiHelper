@@ -7,6 +7,7 @@ from supabase import Client, create_client
 from app.config import Settings, get_settings
 from app.models.auth import UserResponse
 from app.services.auth import AuthService
+from app.services.profiles import ProfileService
 from app.services.reviews import ReviewService
 
 bearer_scheme = HTTPBearer()
@@ -58,3 +59,10 @@ def get_review_service(client: UserClient) -> ReviewService:
 
 
 ReviewServiceDep = Annotated[ReviewService, Depends(get_review_service)]
+
+
+def get_profile_service(client: UserClient) -> ProfileService:
+    return ProfileService(client)
+
+
+ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]

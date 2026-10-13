@@ -1,9 +1,18 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class Credentials(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
+
+
+class SignupRequest(Credentials):
+    username: str = Field(pattern=r"^[A-Za-z0-9_]{3,20}$")
+
+    @field_validator("username")
+    @classmethod
+    def _lowercase(cls, v: str) -> str:
+        return v.lower()
 
 
 class RefreshRequest(BaseModel):

@@ -15,7 +15,7 @@ uv run pytest
 
 | Endpoint | Body | Result |
 | --- | --- | --- |
-| `POST /auth/signup` | `{email, password}` (password >= 8 chars) | user, tokens (or `confirmation_required: true`) |
+| `POST /auth/signup` | `{email, password, username}` (password >= 8 chars; username 3-20 chars of letters, digits, `_`, stored lowercase; 409 if taken) | user, tokens (or `confirmation_required: true`) |
 | `POST /auth/login` | `{email, password}` | `access_token`, `refresh_token`, `expires_in` |
 | `POST /auth/refresh` | `{refresh_token}` | new tokens |
 | `GET /auth/me` | Bearer token | current user |
@@ -30,6 +30,7 @@ Requires the Bearer token. One row per user per study day; the add-on sends the 
 | `PUT /reviews/daily` | `{total_reviews, study_date, retention?, study_minutes?}` (ISO date, e.g. `2026-01-31`; `retention` is a percent 0-100; `study_minutes` is 0-1440) | inserts that day's row or overwrites its values; omitted optional fields keep their stored value |
 | `GET /reviews/daily` | `start`, `end` (dates), `limit` (1-365, default 90) | your rows, newest first |
 | `GET /reviews/daily/{date}` | | that day's row, or 404 |
+| `GET /profiles/{username}/reviews` | | `{username, start, end, days}`: that user's daily rows for the past 30 days, newest first (no `updated_at`); 404 if the username doesn't exist |
 
 ## Add-on flow
 

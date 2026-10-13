@@ -4,6 +4,7 @@ from app.dependencies import AuthServiceDep, CurrentUser, TokenDep
 from app.models.auth import (
     Credentials,
     RefreshRequest,
+    SignupRequest,
     SignupResponse,
     TokenResponse,
     UserResponse,
@@ -13,8 +14,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
-def signup(body: Credentials, auth: AuthServiceDep):
-    return auth.sign_up(body.email, body.password)
+def signup(body: SignupRequest, auth: AuthServiceDep):
+    return auth.sign_up(body.email, body.password, body.username)
 
 
 @router.post("/login", response_model=TokenResponse)

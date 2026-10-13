@@ -9,7 +9,7 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | Method and path | Auth | Request | Success response |
 | --- | --- | --- | --- |
 | `GET /health` | no | | status |
-| `POST /auth/signup` | no | `{email, password}` (password >= 8 chars) | 201 `{user: {id, email}, tokens \| null, confirmation_required}` |
+| `POST /auth/signup` | no | `{email, password, username}` (password >= 8 chars; username 3-20 chars of letters, digits, `_`, stored lowercase; 409 if taken) | 201 `{user: {id, email}, tokens \| null, confirmation_required}` |
 | `POST /auth/login` | no | `{email, password}` | `{access_token, refresh_token, token_type, expires_in}` |
 | `POST /auth/refresh` | no | `{refresh_token}` | new `{access_token, refresh_token, token_type, expires_in}` |
 | `GET /auth/me` | yes | | `{id, email}` |
@@ -17,6 +17,7 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `PUT /reviews/daily` | yes | `{total_reviews, study_date, retention?, study_minutes?}` | the saved row (below) |
 | `GET /reviews/daily` | yes | query: `start`, `end` (ISO dates, optional), `limit` (1-365, default 90) | list of rows, newest first |
 | `GET /reviews/daily/{study_date}` | yes | | one row, or 404 |
+| `GET /profiles/{username}/reviews` | yes | | `{username, start, end, days}` with that user's rows for the past 30 days (newest first, same fields as a row minus `updated_at`); 404 if no such username |
 
 A review row is `{study_date: "YYYY-MM-DD", total_reviews: int, retention: float | null, study_minutes: float | null, updated_at: ISO datetime}`. `retention` is a percent (0-100) and `study_minutes` is the minutes studied that day (0-1440). Both are optional on PUT; if omitted, any stored value is kept (null if never sent). Send them as running values for the day, like `total_reviews`.
 
