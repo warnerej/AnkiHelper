@@ -17,7 +17,7 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `PUT /reviews/daily` | yes | `{total_reviews, study_date, retention?, study_minutes?}` | the saved row (below) |
 | `GET /reviews/daily` | yes | query: `start`, `end` (ISO dates, optional), `limit` (1-365, default 90) | list of rows, newest first |
 | `GET /reviews/daily/{study_date}` | yes | | one row, or 404 |
-| `GET /profiles/{username}/reviews` | yes | | `{username, start, end, days}` with that user's rows for the past 30 days (newest first, same fields as a row minus `updated_at`); 404 if no such username |
+| `GET /profiles/{username}/reviews` | yes | | `{username, start, end, days}` with that user's rows for the past `days` days (query param, 1-365, default 30; newest first, same fields as a row minus `updated_at`); 404 if no such username |
 
 A review row is `{study_date: "YYYY-MM-DD", total_reviews: int, retention: float | null, study_minutes: float | null, updated_at: ISO datetime}`. `retention` is a percent (0-100) and `study_minutes` is the minutes studied that day (0-1440). Both are optional on PUT; if omitted, any stored value is kept (null if never sent). Send them as running values for the day, like `total_reviews`.
 

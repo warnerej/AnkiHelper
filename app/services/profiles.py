@@ -6,7 +6,8 @@ from supabase import Client
 
 from app.models.profiles import FriendDailyReview, FriendReviews
 
-WINDOW_DAYS = 30
+DEFAULT_WINDOW_DAYS = 30
+MAX_WINDOW_DAYS = 365
 
 
 def _db_error(e: APIError) -> HTTPException:
@@ -19,10 +20,12 @@ class ProfileService:
     def __init__(self, client: Client):
         self._client = client
 
-    def friend_reviews(self, username: str) -> FriendReviews:
+    def friend_reviews(
+        self, username: str, days: int = DEFAULT_WINDOW_DAYS
+    ) -> FriendReviews:
         # The server has no timezone logic (clients own study_date), so "today" is the server's.
         end = date.today()
-        start = end - timedelta(days=WINDOW_DAYS - 1)
+        start = end - timedelta(days=days - 1)
         username = username.lower()
         try:
             profile = (

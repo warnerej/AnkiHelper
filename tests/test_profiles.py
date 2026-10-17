@@ -29,13 +29,16 @@ class FakeProfiles:
             ]
         }
 
-    def friend_reviews(self, username):
+    def friend_reviews(self, username, days=30):
         username = username.lower()
         if username not in self.users:
             raise HTTPException(404, "No such user")
         end = date.today()
         return FriendReviews(
-            username=username, start=end - timedelta(days=29), end=end, days=self.users[username]
+            username=username,
+            start=end - timedelta(days=days - 1),
+            end=end,
+            days=self.users[username],
         )
 
 
@@ -63,6 +66,19 @@ def test_friend_reviews(client):
     assert body["days"][1]["study_minutes"] is None
     assert "updated_at" not in body["days"][0]
     assert date.fromisoformat(body["end"]) - date.fromisoformat(body["start"]) == timedelta(days=29)
+
+
+def test_days_param(client):
+    r = client.get("/profiles/bob/reviews?days=365", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert date.fromisoformat(body["end"]) - date.fromisoformat(body["start"]) == timedelta(days=364)
+
+
+@pytest.mark.parametrize("days", [0, 366, "x"])
+def test_days_param_out_of_range_422(client, days):
+    r = client.get(f"/profiles/bob/reviews?days={days}", headers=AUTH)
+    assert r.status_code == 422
 
 
 def test_username_lookup_is_case_insensitive(client):
