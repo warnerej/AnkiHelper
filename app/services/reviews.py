@@ -4,12 +4,30 @@ from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from supabase import Client
 
-from app.models.reviews import DailyReview, DailyReviewUpsert
+from app.models.reviews import (
+    DailyReview,
+    DailyReviewUpsert,
+    HistoryResult,
+    HistoryStatus,
+    HistoryUpload,
+)
 
 COLUMNS = "study_date,total_reviews,retention,study_minutes,updated_at"
 
+# Error tokens raised by replace_daily_reviews in supabase/migrations/0008_review_history.sql.
+ERROR_STATUS = {
+    "rate_limited": (
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "Too many history uploads; try again later",
+    ),
+    "invalid_range": (422, "Invalid date range"),
+}
+
 
 def _db_error(e: APIError) -> HTTPException:
+    if e.message in ERROR_STATUS:
+        code, detail = ERROR_STATUS[e.message]
+        return HTTPException(code, detail)
     return HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error")
 
 
@@ -17,7 +35,41 @@ class ReviewService:
     """Expects a client authenticated as the user, so RLS scopes every query."""
 
     def __init__(self, client: Client):
+        self._client = client
         self._table = client.table("daily_reviews")
+
+    def _synced_at(self, user_id: str) -> str | None:
+        # profiles is readable by everyone, so filter to the caller's row explicitly.
+        try:
+            res = (
+                self._client.table("profiles")
+                .select("history_synced_at")
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except APIError as e:
+            raise _db_error(e) from e
+        return res.data[0]["history_synced_at"] if res.data else None
+
+    def replace_history(self, body: HistoryUpload, user_id: str) -> HistoryResult:
+        params = {
+            "p_start": body.start.isoformat(),
+            "p_end": body.end.isoformat(),
+            "p_days": [d.model_dump(mode="json") for d in body.days],
+        }
+        try:
+            written = self._client.rpc("replace_daily_reviews", params).execute().data
+        except APIError as e:
+            raise _db_error(e) from e
+        synced_at = self._synced_at(user_id)
+        if synced_at is None:  # no profile row to stamp, so the SQL couldn't record the sync
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "profile not found")
+        return HistoryResult(
+            start=body.start, end=body.end, days_written=written, history_synced_at=synced_at
+        )
+
+    def history_status(self, user_id: str) -> HistoryStatus:
+        return HistoryStatus(history_synced_at=self._synced_at(user_id))
 
     def upsert(self, body: DailyReviewUpsert) -> DailyReview:
         row = {

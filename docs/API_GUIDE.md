@@ -18,6 +18,8 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `PUT /reviews/daily` | yes | `{total_reviews, study_date, retention?, study_minutes?}` | the saved row (below) |
 | `GET /reviews/daily` | yes | query: `start`, `end` (ISO dates, optional), `limit` (1-365, default 90) | list of rows, newest first |
 | `GET /reviews/daily/{study_date}` | yes | | one row, or 404 |
+| `PUT /reviews/history` | yes | `{start, end, days: [{study_date, total_reviews, retention?, study_minutes?}]}` | `{start, end, days_written, history_synced_at}`; replaces your rows in `start`..`end` with `days` (see "Uploading history") |
+| `GET /reviews/history/status` | yes | | `{history_synced_at}`; null if you've never uploaded history |
 | `GET /profiles/{username}/reviews` | yes | | **Deprecated, use `GET /groups/{id}/reviews`; removed once the new add-on ships.** `{username, start, end, days}` with that user's rows for the past `days` days (query param, 1-365, default 30; newest first, same fields as a row minus `updated_at`); 404 if no such username *or* you and that user haven't both joined a common group |
 | `POST /groups` | yes | `{name}` (1-50 chars) | 201 the group incl. `invite_code`; you become owner (max 20 owned groups, else 409) |
 | `GET /groups` | yes | | your groups: `[{id, name, role, member_count}]` |
@@ -64,6 +66,32 @@ Authorization: Bearer <access_token>
 200 {"study_date": "2026-01-31", "total_reviews": 42, "retention": 87.5, "study_minutes": 31.5, "updated_at": "2026-01-31T21:04:11.2+00:00"}
 ```
 
+## Uploading history
+
+`PUT /reviews/history` is a bulk backfill: the client sends per-day stats for a date range and the server **replaces** its stored rows for that range.
+
+- **Replace, not merge.** Your rows in the inclusive range `start`..`end` are deleted and `days` is inserted. A date in the range that is missing from `days` ends up with no reviews, and an empty `days` clears the range. Rows outside the range are untouched. The whole call is one transaction, so a failure leaves the old rows as they were.
+- **Upload after an Anki sync.** The local revlog is the source of truth, and only after a sync does it include reviews done on AnkiDroid or AnkiMobile.
+- **Limits:** at most 365 days in the range (inclusive), at most 365 items in `days`, unique dates all inside the range, and `end` at most one day ahead of the server's date (so clients ahead of UTC, such as Japan, whose Anki day may already be tomorrow, are accepted). Violations are 422.
+- **Rate limit:** 5 uploads per user per hour, then 429. Failed uploads don't count.
+- **Retries are safe**: the same request gives the same result.
+- **Deciding whether to backfill:** `GET /reviews/history/status` returns `history_synced_at`, null until the account's first upload. It is stored server-side, so a reinstall or second computer doesn't repeat the automatic upload. The add-on can also upload manually if the data looks wrong.
+
+```
+PUT /reviews/history
+Authorization: Bearer <access_token>
+{"start": "2026-01-01", "end": "2026-01-03", "days": [
+  {"study_date": "2026-01-01", "total_reviews": 42, "retention": 87.5, "study_minutes": 31.5},
+  {"study_date": "2026-01-03", "total_reviews": 10}]}
+
+200 {"start": "2026-01-01", "end": "2026-01-03", "days_written": 2, "history_synced_at": "2026-01-04T09:12:00+00:00"}
+
+GET /reviews/history/status
+200 {"history_synced_at": "2026-01-04T09:12:00+00:00"}
+```
+
+In this example 2026-01-02 had no reviews, so any stored row for it is removed.
+
 ## Error handling
 
 | Status | Meaning | Client action |
@@ -72,7 +100,7 @@ Authorization: Bearer <access_token>
 | 403 | a group member called an owner-only endpoint | don't retry |
 | 404 | no review row for that date; or a group / user that doesn't exist or isn't visible to you | treat as "no data" / "not found" |
 | 409 | group conflict: owner leaving, group or allowed-list limit reached, transfer target hasn't joined | show the message, don't retry |
-| 429 | too many failed `POST /groups/join` attempts | stop; wait up to an hour |
+| 429 | too many failed `POST /groups/join` attempts, or more than 5 `PUT /reviews/history` uploads in an hour | stop; wait up to an hour |
 | 422 | body or query failed validation (negative total, bad or missing date, short password) | fix the request, don't retry unchanged |
 | 502 | the database call failed | retry later with backoff |
 

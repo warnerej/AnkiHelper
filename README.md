@@ -31,6 +31,8 @@ Requires the Bearer token. One row per user per study day; the add-on sends the 
 | `PUT /reviews/daily` | `{total_reviews, study_date, retention?, study_minutes?}` (ISO date, e.g. `2026-01-31`; `retention` is a percent 0-100; `study_minutes` is 0-1440) | inserts that day's row or overwrites its values; omitted optional fields keep their stored value |
 | `GET /reviews/daily` | `start`, `end` (dates), `limit` (1-365, default 90) | your rows, newest first |
 | `GET /reviews/daily/{date}` | | that day's row, or 404 |
+| `PUT /reviews/history` | `{start, end, days: [{study_date, total_reviews, retention?, study_minutes?}]}` (max 365 days; `end` up to 1 day ahead of the server date; 5 uploads/hour) | replaces your rows in that range with `days` (missing dates are removed); upload after an Anki sync so mobile reviews are included. Apply `0008_review_history.sql` first |
+| `GET /reviews/history/status` | | `{history_synced_at}`, null until the first history upload (tells the add-on whether to run the automatic backfill) |
 | `GET /profiles/{username}/reviews?days=` | | `{username, start, end, days}`: **deprecated** (use the groups endpoint below): that user's daily rows for the past `days` days (1-365, default 30), newest first (no `updated_at`); 404 if the username doesn't exist or you don't share a joined group with them |
 
 ## Groups API

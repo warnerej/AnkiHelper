@@ -9,6 +9,11 @@ MAX_ALLOWED_USERNAMES = 50
 # Failed joins allowed per user per window (0006_join_rate_limit.sql); mirrored there too.
 JOIN_MAX_FAILURES = 10
 JOIN_WINDOW_MINUTES = 60
+# History upload limits (0008_review_history.sql); mirrored there, change both together.
+# The end date may be this many days ahead of the server's date, for clients ahead of UTC.
+HISTORY_MAX_DAYS = 365
+HISTORY_SYNC_MAX_PER_HOUR = 5
+HISTORY_FUTURE_SLACK_DAYS = 1
 
 
 class Settings(BaseSettings):
