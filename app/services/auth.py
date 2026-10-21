@@ -99,3 +99,17 @@ class AuthService:
             self._auth.admin.sign_out(token, "local")
         except AuthError as e:
             raise _unauthorized("Invalid or expired token") from e
+
+    def delete_account(self, user: UserResponse, password: str) -> None:
+        """Re-check the password with a fresh sign-in, then delete the account in Postgres
+        (delete_my_account hands off or removes owned groups, and the rest cascades)."""
+        try:
+            res = self._auth.sign_in_with_password({"email": user.email, "password": password})
+        except AuthApiError as e:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Incorrect password") from e
+        # Act as the user whose password was just verified.
+        self._client.postgrest.auth(res.session.access_token)
+        try:
+            self._client.rpc("delete_my_account").execute()
+        except APIError as e:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error") from e

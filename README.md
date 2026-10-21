@@ -20,6 +20,7 @@ uv run pytest
 | `POST /auth/refresh` | `{refresh_token}` | new tokens |
 | `GET /auth/me` | Bearer token | current user |
 | `POST /auth/logout` | Bearer token | 204, ends this session |
+| `DELETE /auth/me` | Bearer token | body `{password}`; 204, 403 for a wrong password. Irreversible; owned groups pass to the longest-standing member, or are deleted if empty |
 
 ## Daily reviews API
 
@@ -34,7 +35,7 @@ Requires the Bearer token. One row per user per study day; the add-on sends the 
 
 ## Groups API
 
-Requires the Bearer token and `supabase/migrations/0004_groups.sql` and `0005_friend_reviews_via_groups.sql` and `0006_join_rate_limit.sql`. A user creates a group (and owns it), the owner keeps an allowed list of usernames, and a user joins with the invite code only if their username is on that list. Only joined members share daily reviews with each other (last 365 days). All rules are enforced in Postgres (RLS and `security definer` functions), not just in the routes.
+Requires the Bearer token. Apply `supabase/migrations/0004_groups.sql`, `0005_friend_reviews_via_groups.sql` and `0006_join_rate_limit.sql` in Supabase, in that order. A user creates a group (and owns it), the owner keeps an allowed list of usernames, and a user joins with the invite code only if their username is on that list. Only joined members share daily reviews with each other (last 365 days). All rules are enforced in Postgres (RLS and `security definer` functions), not just in the routes.
 
 | Endpoint | Body / query | Result |
 | --- | --- | --- |

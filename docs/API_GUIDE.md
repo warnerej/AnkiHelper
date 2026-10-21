@@ -14,6 +14,7 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `POST /auth/refresh` | no | `{refresh_token}` | new `{access_token, refresh_token, token_type, expires_in}` |
 | `GET /auth/me` | yes | | `{id, email}` |
 | `POST /auth/logout` | yes | | 204, ends this session |
+| `DELETE /auth/me` | yes | `{password}` | 204; 403 for a wrong password. Irreversible: deletes the profile, reviews and memberships; owned groups pass to the longest-standing member, or are deleted if empty |
 | `PUT /reviews/daily` | yes | `{total_reviews, study_date, retention?, study_minutes?}` | the saved row (below) |
 | `GET /reviews/daily` | yes | query: `start`, `end` (ISO dates, optional), `limit` (1-365, default 90) | list of rows, newest first |
 | `GET /reviews/daily/{study_date}` | yes | | one row, or 404 |
@@ -70,8 +71,8 @@ Authorization: Bearer <access_token>
 | 401 | missing, invalid or expired token | refresh once, retry once, else log in again |
 | 403 | a group member called an owner-only endpoint | don't retry |
 | 404 | no review row for that date; or a group / user that doesn't exist or isn't visible to you | treat as "no data" / "not found" |
-| 429 | too many failed `POST /groups/join` attempts | stop; wait up to an hour |
 | 409 | group conflict: owner leaving, group or allowed-list limit reached, transfer target hasn't joined | show the message, don't retry |
+| 429 | too many failed `POST /groups/join` attempts | stop; wait up to an hour |
 | 422 | body or query failed validation (negative total, bad or missing date, short password) | fix the request, don't retry unchanged |
 | 502 | the database call failed | retry later with backoff |
 
@@ -81,8 +82,8 @@ Follow `CLAUDE.md`. In short:
 
 - Layers: `app/routers/` (HTTP), `app/services/` (logic, takes a Supabase `Client`), `app/models/` (pydantic). Register new routers in `app/main.py`.
 - Protect routes with `CurrentUser`. Query Supabase through `UserClient` (from `app/dependencies.py`) so RLS applies as that user. Only the anon key is used. Never add the service-role key.
-- New tables go in a numbered file in `supabase/migrations/` (the user applies it in Supabase). Give each table a `user_id uuid not null default auth.uid()`, enable RLS, and add per-operation policies for `user_id = (select auth.uid())`. `0001_daily_reviews.sql` is the template. It uses a `(user_id, study_date)` primary key and an `updated_at` trigger.
-- Tests override dependencies with fakes (`get_auth_service`, `get_review_service`), so they need no Supabase project. See `tests/test_reviews.py`. Run `uv run pytest`.
+- New tables go in a numbered file in `supabase/migrations/` (the user applies it in Supabase). Always enable RLS. For per-user data give the table a `user_id uuid not null default auth.uid()` and per-operation policies for `user_id = (select auth.uid())` (`0001_daily_reviews.sql` is the template). For data shared between users (`0004_groups.sql` is the template) skip write policies and do writes in `security definer` functions with `set search_path = ''` that check `auth.uid()`, raising a short error token (`raise exception 'not_found'`) that the service maps to an HTTP status. It uses a `(user_id, study_date)` primary key and an `updated_at` trigger.
+- Tests override dependencies with fakes (`get_auth_service`, `get_review_service`, `get_group_service`, ...), so they need no Supabase project. See `tests/test_reviews.py`. Run `uv run pytest`.
 - Update the endpoint tables in `README.md` and this file when adding endpoints.
 
 ## Note on the older handoff doc
