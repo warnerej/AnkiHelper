@@ -17,7 +17,21 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `PUT /reviews/daily` | yes | `{total_reviews, study_date, retention?, study_minutes?}` | the saved row (below) |
 | `GET /reviews/daily` | yes | query: `start`, `end` (ISO dates, optional), `limit` (1-365, default 90) | list of rows, newest first |
 | `GET /reviews/daily/{study_date}` | yes | | one row, or 404 |
-| `GET /profiles/{username}/reviews` | yes | | `{username, start, end, days}` with that user's rows for the past `days` days (query param, 1-365, default 30; newest first, same fields as a row minus `updated_at`); 404 if no such username |
+| `GET /profiles/{username}/reviews` | yes | | **Deprecated, use `GET /groups/{id}/reviews`; removed once the new add-on ships.** `{username, start, end, days}` with that user's rows for the past `days` days (query param, 1-365, default 30; newest first, same fields as a row minus `updated_at`); 404 if no such username *or* you and that user haven't both joined a common group |
+| `POST /groups` | yes | `{name}` (1-50 chars) | 201 the group incl. `invite_code`; you become owner (max 20 owned groups, else 409) |
+| `GET /groups` | yes | | your groups: `[{id, name, role, member_count}]` |
+| `GET /groups/{id}` | yes | | `{id, name, owner, members: [{username, role, joined_at}]}`; the owner also gets `invite_code` and `allowed` (list of usernames); 404 for non-members, whether or not the group exists |
+| `PATCH /groups/{id}` | yes | `{name}` | owner only; the group |
+| `DELETE /groups/{id}` | yes | | owner only; 204, deletes members and allowed list |
+| `POST /groups/join` | yes | `{invite_code}` | the group; 404 for a bad code and for "your username isn't on the allowed list" (identical, so codes can't be probed); joining twice is fine; 429 after 10 failed attempts in an hour (per user) |
+| `POST /groups/{id}/leave` | yes | | 204; 409 for the owner (transfer or delete instead) |
+| `POST /groups/{id}/allowed` | yes | `{username}` | owner only; adds the lowercased username (needn't exist yet; max 50, else 409); returns the group |
+| `DELETE /groups/{id}/allowed/{username}` | yes | | owner only; 204; also removes that user's membership; 409 for the owner's own name |
+| `POST /groups/{id}/invite-code` | yes | | owner only; `{invite_code}` (new; the old one stops working) |
+| `POST /groups/{id}/transfer` | yes | `{username}` | owner only; the target must have joined (else 409); you become a member; returns the group |
+| `GET /groups/{id}/reviews` | yes | query: `days` (1-365, default 30) | `{group_id, start, end, members: [{username, days: [...]}]}`; every joined member appears (`days` may be empty); day rows have the same fields as the friend rows; 404 for non-members |
+
+Groups: sharing happens only between members who have **joined** the same group. Joining needs the invite code *and* the joiner's username on the group's allowed list (being allowed alone shares nothing). Members see each other's last 365 days, including days before they joined. Removing a username from the allowed list drops that user from the group immediately. Group endpoints return 403 when a member (not the owner) calls an owner-only action, and 404 when a non-member touches the group at all.
 
 A review row is `{study_date: "YYYY-MM-DD", total_reviews: int, retention: float | null, study_minutes: float | null, updated_at: ISO datetime}`. `retention` is a percent (0-100) and `study_minutes` is the minutes studied that day (0-1440). Both are optional on PUT; if omitted, any stored value is kept (null if never sent). Send them as running values for the day, like `total_reviews`.
 
@@ -54,7 +68,10 @@ Authorization: Bearer <access_token>
 | Status | Meaning | Client action |
 | --- | --- | --- |
 | 401 | missing, invalid or expired token | refresh once, retry once, else log in again |
-| 404 | no review row for that date | treat as "no data" |
+| 403 | a group member called an owner-only endpoint | don't retry |
+| 404 | no review row for that date; or a group / user that doesn't exist or isn't visible to you | treat as "no data" / "not found" |
+| 429 | too many failed `POST /groups/join` attempts | stop; wait up to an hour |
+| 409 | group conflict: owner leaving, group or allowed-list limit reached, transfer target hasn't joined | show the message, don't retry |
 | 422 | body or query failed validation (negative total, bad or missing date, short password) | fix the request, don't retry unchanged |
 | 502 | the database call failed | retry later with backoff |
 

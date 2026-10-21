@@ -3,6 +3,14 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Mirrored in supabase/migrations/0004_groups.sql, which enforces them; change both together.
+MAX_OWNED_GROUPS = 20
+MAX_ALLOWED_USERNAMES = 50
+# Failed joins allowed per user per window (0006_join_rate_limit.sql); mirrored there too.
+JOIN_MAX_FAILURES = 10
+JOIN_WINDOW_MINUTES = 60
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
