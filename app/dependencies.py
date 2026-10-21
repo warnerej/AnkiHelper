@@ -7,6 +7,7 @@ from supabase import Client, create_client
 from app.config import Settings, get_settings
 from app.models.auth import UserResponse
 from app.services.auth import AuthService
+from app.services.groups import GroupService
 from app.services.profiles import ProfileService
 from app.services.reviews import ReviewService
 
@@ -66,3 +67,10 @@ def get_profile_service(client: UserClient) -> ProfileService:
 
 
 ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
+
+
+def get_group_service(client: UserClient) -> GroupService:
+    return GroupService(client)
+
+
+GroupServiceDep = Annotated[GroupService, Depends(get_group_service)]

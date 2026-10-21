@@ -15,6 +15,10 @@ class SignupRequest(Credentials):
         return v.lower()
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

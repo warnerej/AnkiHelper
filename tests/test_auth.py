@@ -30,7 +30,7 @@ class FakeAuth:
         return SignupResponse(user=USER, tokens=TOKENS)
 
     def login(self, email, password):
-        if password != CREDS["password"]:
+        if self.deleted or password != CREDS["password"]:
             raise _401()
         return TOKENS
 
@@ -40,12 +40,19 @@ class FakeAuth:
         return TOKENS
 
     def get_user(self, token):
-        if token != "acc":
+        if self.deleted or token != "acc":
             raise _401()
         return USER
 
     def logout(self, token):
         self.get_user(token)
+
+    deleted = False
+
+    def delete_account(self, user, password):
+        if password != CREDS["password"]:
+            raise HTTPException(403, "Incorrect password")
+        self.deleted = True
 
 
 @pytest.fixture
@@ -123,3 +130,27 @@ def test_me_requires_token(client):
 def test_logout(client):
     assert client.post("/auth/logout", headers=AUTH).status_code == 204
     assert client.post("/auth/logout", headers={"Authorization": "Bearer bad"}).status_code == 401
+
+
+def test_delete_account(client, fake):
+    r = client.request("DELETE", "/auth/me", headers=AUTH, json={"password": CREDS["password"]})
+    assert r.status_code == 204
+    assert fake.deleted
+    assert client.post("/auth/login", json=CREDS).status_code == 401
+    assert client.get("/auth/me", headers=AUTH).status_code == 401
+
+
+def test_delete_account_wrong_password(client, fake):
+    r = client.request("DELETE", "/auth/me", headers=AUTH, json={"password": "wrongpass1"})
+    assert r.status_code == 403
+    assert not fake.deleted
+    assert client.post("/auth/login", json=CREDS).status_code == 200
+
+
+def test_delete_account_requires_token_and_body(client, fake):
+    body = {"password": CREDS["password"]}
+    assert client.request("DELETE", "/auth/me", json=body).status_code in (401, 403)
+    bad = {"Authorization": "Bearer bad"}
+    assert client.request("DELETE", "/auth/me", headers=bad, json=body).status_code == 401
+    assert client.request("DELETE", "/auth/me", headers=AUTH).status_code == 422
+    assert not fake.deleted

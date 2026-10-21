@@ -85,5 +85,10 @@ def test_username_lookup_is_case_insensitive(client):
     assert client.get("/profiles/BOB/reviews", headers=AUTH).status_code == 200
 
 
+def test_user_without_shared_group_404(client):
+    # The service raises the same 404 as for an unknown user (see ProfileService.friend_reviews).
+    assert client.get("/profiles/stranger/reviews", headers=AUTH).status_code == 404
+
+
 def test_unknown_user_404(client):
     assert client.get("/profiles/nobody/reviews", headers=AUTH).status_code == 404

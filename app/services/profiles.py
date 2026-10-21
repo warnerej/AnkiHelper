@@ -45,6 +45,8 @@ class ProfileService:
                 },
             ).execute()
         except APIError as e:
+            if e.message == "not_found":  # no shared group; same answer as an unknown user
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user") from e
             raise _db_error(e) from e
         return FriendReviews(
             username=profile.data[0]["username"],

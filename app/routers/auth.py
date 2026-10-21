@@ -3,6 +3,7 @@ from fastapi import APIRouter, Response, status
 from app.dependencies import AuthServiceDep, CurrentUser, TokenDep
 from app.models.auth import (
     Credentials,
+    DeleteAccountRequest,
     RefreshRequest,
     SignupRequest,
     SignupResponse,
@@ -36,4 +37,10 @@ def me(user: CurrentUser):
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(token: TokenDep, auth: AuthServiceDep):
     auth.logout(token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(body: DeleteAccountRequest, user: CurrentUser, auth: AuthServiceDep):
+    auth.delete_account(user, body.password)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
