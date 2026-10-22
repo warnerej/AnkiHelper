@@ -83,6 +83,10 @@ class AuthService:
     def request_password_reset(self, email: str, ip: str) -> None:
         """Send a reset email. Every outcome except the rate limit looks the same to the caller,
         so this can't be used to find out which emails have accounts."""
+        if not self._reset_redirect_url:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "Password reset is not available"
+            )
         try:
             allowed = self._client.rpc(
                 "check_password_reset_limit", {"p_ip": ip, "p_email": email}

@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_key: str  # anon/public key; user access is enforced by RLS
     # Page on the site that reads the recovery token and sets a new password. Must also be in
-    # the Supabase project's Redirect URLs allowlist.
-    password_reset_redirect_url: str
+    # the Supabase project's Redirect URLs allowlist. Only forgot-password needs it: while it is
+    # empty that endpoint returns 503 and everything else works.
+    password_reset_redirect_url: str = ""
 
 
 @lru_cache

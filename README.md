@@ -18,7 +18,7 @@ uv run pytest
 | `POST /auth/signup` | `{email, password, username}` (password >= 8 chars; username 3-20 chars of letters, digits, `_`, stored lowercase; 409 if taken) | user, tokens (or `confirmation_required: true`) |
 | `POST /auth/login` | `{email, password}` | `access_token`, `refresh_token`, `expires_in` |
 | `POST /auth/refresh` | `{refresh_token}` | new tokens |
-| `POST /auth/forgot-password` | none | body `{email}`; always 202 with the same message whether or not the account exists; 429 after 3 requests per email or 10 per IP in an hour. Emails a link to `PASSWORD_RESET_REDIRECT_URL`; the site page sets the new password through Supabase. Apply `0009` first |
+| `POST /auth/forgot-password` | none | body `{email}`; always 202 with the same message whether or not the account exists; 429 after 3 requests per email or 10 per IP in an hour. Emails a link to `PASSWORD_RESET_REDIRECT_URL`; the site page sets the new password through Supabase. Returns 503 until `PASSWORD_RESET_REDIRECT_URL` is set. Apply `0009` first |
 | `GET /auth/me` | Bearer token | current user |
 | `POST /auth/logout` | Bearer token | 204, ends this session |
 | `DELETE /auth/me` | Bearer token | body `{password}`; 204, 403 for a wrong password. Irreversible; owned groups pass to the longest-standing member, or are deleted if empty |

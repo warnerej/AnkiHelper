@@ -179,3 +179,22 @@ def test_forgot_password_rate_limited(client, fake):
 
 def test_forgot_password_bad_email(client):
     assert client.post("/auth/forgot-password", json={"email": "nope"}).status_code == 422
+
+
+def test_settings_load_without_reset_url(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.setenv("SUPABASE_URL", "https://x.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "key")
+    monkeypatch.delenv("PASSWORD_RESET_REDIRECT_URL", raising=False)
+    assert Settings(_env_file=None).password_reset_redirect_url == ""
+
+
+def test_request_password_reset_unavailable_without_redirect_url():
+    from types import SimpleNamespace
+
+    from app.services.auth import AuthService
+
+    with pytest.raises(HTTPException) as e:
+        AuthService(SimpleNamespace(auth=None)).request_password_reset("a@example.com", "1.2.3.4")
+    assert e.value.status_code == 503
