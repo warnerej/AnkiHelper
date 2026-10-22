@@ -4,7 +4,7 @@ For an agent building the client (the Anki add-on) or extending the backend. `RE
 
 ## Endpoints
 
-All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signup`, `/auth/login` and `/auth/refresh` needs the header `Authorization: Bearer <access_token>`.
+All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signup`, `/auth/login`, `/auth/refresh` and `/auth/forgot-password` needs the header `Authorization: Bearer <access_token>`.
 
 | Method and path | Auth | Request | Success response |
 | --- | --- | --- | --- |
@@ -41,9 +41,9 @@ A review row is `{study_date: "YYYY-MM-DD", total_reviews: int, retention: float
 
 ## Auth flow for the client
 
-1. On startup, call `POST /auth/login` with the email and password from the add-on config.
-2. Keep both tokens in memory only (not in the config file). Send `Authorization: Bearer <access_token>` on every call.
-3. On a 401, call `POST /auth/refresh` once and retry the original request once. Refresh tokens rotate and are single use, so always store the new refresh token, and do not refresh before every call. If the refresh fails, log in again.
+1. The user logs in through a dialog (`POST /auth/login`); the password is never stored. On startup the add-on restores the session with `POST /auth/refresh` using the saved refresh token.
+2. Keep the access token in memory only; persist only the refresh token (the add-on uses `user_files/session.json`, not its config file). Send `Authorization: Bearer <access_token>` on every call.
+3. On a 401, call `POST /auth/refresh` once and retry the original request once. Refresh tokens rotate and are single use, so always store the new refresh token, and do not refresh before every call. If the refresh is rejected, delete the saved token and ask the user to log in again; on a 5xx or network error keep the session.
 4. Use HTTPS in deployment since the password is sent on login and signup.
 
 ## Designing review calls
@@ -66,6 +66,13 @@ Authorization: Bearer <access_token>
 
 200 {"study_date": "2026-01-31", "total_reviews": 42, "retention": 87.5, "study_minutes": 31.5, "updated_at": "2026-01-31T21:04:11.2+00:00"}
 ```
+
+## How the add-on uses history upload
+
+- **Automatic, once per account:** after login, signup or session restore, when `GET /reviews/history/status` says `history_synced_at` is null, it uploads the last 365 days. If the profile uses AnkiWeb sync it waits for the first sync of the session so phone reviews are included. It never uploads a year with zero reviews (that would wipe the server's history); it stays pending and retries next session.
+- **Catch-up after each sync:** once the server has history, each sync re-uploads the last 7 days (skipped when empty, at most one history upload per 15 minutes).
+- **Manual:** Tools > AnkiHelper > Re-upload review history uploads the last 365 days after a confirmation. A 429 means try again in an hour.
+- The add-on never retries `POST /auth/forgot-password` or `DELETE /auth/me`, and it uploads nothing until the user has consented to sharing.
 
 ## Uploading history
 
@@ -114,7 +121,3 @@ Follow `CLAUDE.md`. In short:
 - New tables go in a numbered file in `supabase/migrations/` (the user applies it in Supabase). Always enable RLS. For per-user data give the table a `user_id uuid not null default auth.uid()` and per-operation policies for `user_id = (select auth.uid())` (`0001_daily_reviews.sql` is the template). For data shared between users (`0004_groups.sql` is the template) skip write policies and do writes in `security definer` functions with `set search_path = ''` that check `auth.uid()`, raising a short error token (`raise exception 'not_found'`) that the service maps to an HTTP status. It uses a `(user_id, study_date)` primary key and an `updated_at` trigger.
 - Tests override dependencies with fakes (`get_auth_service`, `get_review_service`, `get_group_service`, ...), so they need no Supabase project. See `tests/test_reviews.py`. Run `uv run pytest`.
 - Update the endpoint tables in `README.md` and this file when adding endpoints.
-
-## Note on the older handoff doc
-
-`docs/ANKI_HANDOFF.md` was written before the reviews endpoints existed and says only auth is built. Treat it as background on conventions and open questions. This file and the README describe the current state.

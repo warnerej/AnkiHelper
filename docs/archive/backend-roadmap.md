@@ -1,3 +1,5 @@
+> **Archived 2026-10-22.** Done: groups (0004-0006) and account deletion (0007) shipped; the leaked-secrets check and repo visibility are tracked in `ROADMAP.md`.
+
 # AnkiHelper backend roadmap: groups and account deletion
 
 Handoff for Claude Code, for the **backend repo** (`AnkiHelper`). Work through the tasks **in order** and stop for review after each one. The add-on has its own roadmap. It is a separate repo and will be updated after these endpoints exist.

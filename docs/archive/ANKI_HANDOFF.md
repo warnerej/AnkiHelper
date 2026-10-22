@@ -1,3 +1,5 @@
+> **Archived 2026-10-22.** Historical: written when only auth existed. See `README.md` and `docs/API_GUIDE.md` for the current state.
+
 # AnkiHelper: handoff for building the Anki section
 
 You are picking up a project in progress. This file is the context you need. Read `CLAUDE.md` and `README.md` in the repo root as well. They are authoritative where they overlap with this file.

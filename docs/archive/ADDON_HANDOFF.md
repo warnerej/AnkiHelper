@@ -1,3 +1,5 @@
+> **Archived 2026-10-22.** Done: the add-on consumes these endpoints. Endpoint detail now lives in `docs/API_GUIDE.md`; the open site/password-reset page is tracked in `ROADMAP.md`.
+
 # Handoff: backend → Anki add-on
 
 ## Context

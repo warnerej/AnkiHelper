@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-Auth is implemented (signup, login, refresh, me, logout, delete account) under `/auth`. Daily review totals live under `/reviews` (table in `supabase/migrations/`, RLS-protected). Signup requires a username, stored in `profiles` (created by a DB trigger); `GET /profiles/{username}/reviews` returns that user's last `days` days (default 30, max 365) via a security-definer SQL function, so `daily_reviews` RLS stays own-rows-only. `README.md` documents the add-on flow. No lint config yet.
+Auth is implemented (signup, login, refresh, forgot-password, me, logout, delete account) under `/auth`. Daily review totals live under `/reviews` (table in `supabase/migrations/`, RLS-protected). Signup requires a username, stored in `profiles` (created by a DB trigger); `GET /profiles/{username}/reviews` returns that user's last `days` days (default 30, max 365) via a security-definer SQL function, so `daily_reviews` RLS stays own-rows-only. `README.md` documents setup, migrations, deployment, rate limits and errors; `SECURITY.md` lists known risks; `docs/API_GUIDE.md` is the endpoint reference for client authors.
 
 ## Groups
 
@@ -33,19 +33,24 @@ Python 3.14 project managed with `uv` (`pyproject.toml`, `uv.lock`). Dependencie
 - Run tests: `uv run pytest`; single test: `uv run pytest tests/test_auth.py::test_login_success`
 - Add a dependency: `uv add <package>`
 
-pytest is configured (`tests/`). No linter is configured yet.
+pytest is configured (`tests/`) and runs in CI (`.github/workflows/ci.yml`). No linter is configured. All tests use fake services; none exercises the SQL or RLS, so changes to migrations need a manual check in Supabase.
 
 ## Architecture
 
-The intended layout is a layered FastAPI app under `app/`:
+The layout is a layered FastAPI app under `app/`:
 
 - `routers/`: HTTP route handlers
 - `services/`: business logic
 - `models/`: data/schema models
-- `dependencies.py`: shared FastAPI dependencies (e.g. the Supabase client, settings)
+- `dependencies.py`: shared FastAPI dependencies (e.g. the Supabase client, settings, `get_client_ip`)
+- `ratelimit.py`: in-memory per-IP sliding-window limiter for the auth endpoints (`rate_limit(...)` dependency; tests call `reset_all()` from `tests/conftest.py`)
+- `services/errors.py`: `_upstream_db_error`, the generic 502 `Database error` used by every service
+- `main.py`: app wiring, `/health`, and the handlers for `httpx.RequestError` (502) and unexpected errors (500)
 
-Configuration is expected to come from environment variables via pydantic-settings, loaded from a git-ignored `.env` at the repo root. Supabase is the backend data store.
+Configuration comes from environment variables via pydantic-settings, loaded from a git-ignored `.env` at the repo root. Supabase is the backend data store.
 
 ## Auth
 
-The Anki add-on logs in with the email/password from its config via `POST /auth/login` and sends `Authorization: Bearer <access_token>` on every other call. `AuthService` (`app/services/auth.py`) wraps Supabase Auth; a new Supabase client is created per request because the client keeps session state in memory. Protect routes with `CurrentUser`; use `UserClient` (from `app/dependencies.py`) for Supabase queries so RLS applies as that user. Only the anon key is used; never add the service-role key. Tests override `get_auth_service` with a fake, so they need no Supabase project.
+The Anki add-on logs in with the email/password from its config via `POST /auth/login` and sends `Authorization: Bearer <access_token>` on every other call. `AuthService` (`app/services/auth.py`) wraps Supabase Auth; a new Supabase client is created per request because the client keeps session state in memory. Protect routes with `CurrentUser`; use `UserClient` (from `app/dependencies.py`) for Supabase queries so RLS applies as that user. Only the anon key is used; never add the service-role key. `models/auth.py` has separate `SignupRequest` (password 8-256 chars) and `LoginRequest` (no minimum, max 256, so old accounts can still log in). Tests override `get_auth_service` with a fake, so they need no Supabase project.
+
+Run uvicorn with `--proxy-headers --forwarded-allow-ips='*'` behind a proxy and keep to one instance, or the in-memory rate limits break (see `README.md` Deployment).

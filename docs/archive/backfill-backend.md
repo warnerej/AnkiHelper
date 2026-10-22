@@ -1,3 +1,5 @@
+> **Archived 2026-10-22.** Done: `PUT /reviews/history` and `GET /reviews/history/status` shipped in migration 0008. Reference: `docs/API_GUIDE.md`.
+
 # AnkiHelper backend: review history backfill
 
 Handoff for Claude Code, for the **backend repo** (`AnkiHelper`). Work through the tasks **in order** and stop for review after each one.
