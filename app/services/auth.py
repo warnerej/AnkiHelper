@@ -58,7 +58,7 @@ class AuthService:
         try:
             available = self._client.rpc("username_available", {"p_username": username}).execute()
         except APIError as e:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error") from e
+            raise _upstream_db_error(e) from e
         if not available.data:
             raise self._username_taken()
         try:
@@ -106,7 +106,7 @@ class AuthService:
                 "check_password_reset_limit", {"p_ip": ip, "p_email": email}
             ).execute()
         except APIError as e:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error") from e
+            raise _upstream_db_error(e) from e
         if not allowed.data:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS, "Too many reset requests; try again later"
@@ -165,10 +165,16 @@ class AuthService:
         try:
             res = self._auth.sign_in_with_password({"email": user.email, "password": password})
         except AuthApiError as e:
+            if not _is_definitive(e):
+                raise _unavailable(e) from e
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Incorrect password") from e
+        except AuthError as e:
+            raise _unavailable(e) from e
+        if res.session is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Incorrect password")
         # Act as the user whose password was just verified.
         self._client.postgrest.auth(res.session.access_token)
         try:
             self._client.rpc("delete_my_account").execute()
         except APIError as e:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error") from e
+            raise _upstream_db_error(e) from e

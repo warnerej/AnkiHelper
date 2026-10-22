@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from supabase import Client
 
+from app.services.errors import _upstream_db_error
 from app.models.reviews import (
     DailyReview,
     DailyReviewUpsert,
@@ -28,7 +29,7 @@ def _db_error(e: APIError) -> HTTPException:
     if e.message in ERROR_STATUS:
         code, detail = ERROR_STATUS[e.message]
         return HTTPException(code, detail)
-    return HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error")
+    return _upstream_db_error(e)
 
 
 class ReviewService:

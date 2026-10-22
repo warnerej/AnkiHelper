@@ -1,7 +1,7 @@
 [project]
 name = "ankihelper"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backend API for the AnkiHelper Anki add-on: review stats and shared groups."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

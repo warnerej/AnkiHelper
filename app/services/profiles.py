@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from supabase import Client
 
+from app.services.errors import _upstream_db_error
 from app.models.profiles import FriendDailyReview, FriendReviews
 
 DEFAULT_WINDOW_DAYS = 30
@@ -11,7 +12,7 @@ MAX_WINDOW_DAYS = 365
 
 
 def _db_error(e: APIError) -> HTTPException:
-    return HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error")
+    return _upstream_db_error(e)
 
 
 class ProfileService:

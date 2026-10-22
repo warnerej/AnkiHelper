@@ -1,12 +1,15 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-class Credentials(BaseModel):
+class LoginRequest(BaseModel):
+    # No minimum length: accounts made under an older rule must still be able to log in.
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str = Field(max_length=256)
 
 
-class SignupRequest(Credentials):
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=256)
     username: str = Field(pattern=r"^[A-Za-z0-9_]{3,20}$")
 
     @field_validator("username")
@@ -20,11 +23,11 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class DeleteAccountRequest(BaseModel):
-    password: str
+    password: str = Field(max_length=256)
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(max_length=2048)
 
 
 class MessageResponse(BaseModel):
