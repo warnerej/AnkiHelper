@@ -109,8 +109,22 @@ class AuthService:
         try:
             res = self._auth.refresh_session(refresh_token)
         except AuthError as e:
+            # Supabase says why (already used, session expired, ...); the client only sees a 401.
+            logger.warning(
+                "refresh rejected: code=%s status=%s message=%s",
+                getattr(e, "code", None),
+                getattr(e, "status", None),
+                e.message,
+            )
+            # Only a definitive rejection is a 401 (the client then drops the session);
+            # network and 5xx failures are retryable and must not log the user out.
+            if not isinstance(e, AuthApiError) or (e.status or 0) >= 500:
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY, "Auth provider unavailable"
+                ) from e
             raise _unauthorized("Invalid or expired refresh token") from e
         if res.session is None:
+            logger.warning("refresh returned no session")
             raise _unauthorized("Invalid or expired refresh token")
         return _tokens(res.session)
 

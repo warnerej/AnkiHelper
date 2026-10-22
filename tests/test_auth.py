@@ -198,3 +198,37 @@ def test_request_password_reset_unavailable_without_redirect_url():
     with pytest.raises(HTTPException) as e:
         AuthService(SimpleNamespace(auth=None)).request_password_reset("a@example.com", "1.2.3.4")
     assert e.value.status_code == 503
+
+
+def _refresh_status(error, caplog):
+    from types import SimpleNamespace
+
+    from app.services.auth import AuthService
+
+    def refresh_session(token):
+        raise error
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(HTTPException) as e:
+            AuthService(SimpleNamespace(auth=SimpleNamespace(refresh_session=refresh_session))).refresh(
+                "secret-refresh-token"
+            )
+    assert "secret-refresh-token" not in caplog.text
+    return e.value.status_code
+
+
+def test_refresh_definitive_rejection_is_401(caplog):
+    from supabase_auth.errors import AuthApiError
+
+    err = AuthApiError("Already Used", 400, "refresh_token_already_used")
+    assert _refresh_status(err, caplog) == 401
+    assert "refresh_token_already_used" in caplog.text
+
+
+def test_refresh_transient_failure_is_502(caplog):
+    from supabase_auth.errors import AuthRetryableError
+
+    assert _refresh_status(AuthRetryableError("timeout", 0), caplog) == 502
+    from supabase_auth.errors import AuthApiError
+
+    assert _refresh_status(AuthApiError("boom", 503, None), caplog) == 502
