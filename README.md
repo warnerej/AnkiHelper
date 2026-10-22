@@ -23,6 +23,10 @@ uv run pytest
 | `POST /auth/logout` | Bearer token | 204, ends this session |
 | `DELETE /auth/me` | Bearer token | body `{password}`; 204, 403 for a wrong password. Irreversible; owned groups pass to the longest-standing member, or are deleted if empty |
 
+## Rate limits
+
+Per-IP, in memory (run a single instance, and uvicorn with `--proxy-headers --forwarded-allow-ips='*'` behind a proxy, otherwise all users share one IP): signup 10/hour, login 20 per 5 minutes, refresh 60 per 5 minutes, delete account 5/hour. Exceeding a limit returns 429. `LoginRequest` has no minimum password length (existing accounts), while `SignupRequest` requires 8 or more.
+
 ## Daily reviews API
 
 Requires the Bearer token. One row per user per study day; the add-on sends the study date, so it decides when a day rolls over. Apply `supabase/migrations/0001_daily_reviews.sql` and `0002_daily_review_stats.sql` in Supabase first (0001 enables RLS).
