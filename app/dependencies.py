@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import Client, create_client
 
@@ -21,8 +21,19 @@ def get_supabase(settings: SettingsDep) -> Client:
     return create_client(settings.supabase_url, settings.supabase_key)
 
 
-def get_auth_service(client: Annotated[Client, Depends(get_supabase)]) -> AuthService:
-    return AuthService(client)
+def get_auth_service(
+    client: Annotated[Client, Depends(get_supabase)], settings: SettingsDep
+) -> AuthService:
+    return AuthService(client, settings.password_reset_redirect_url)
+
+
+def get_client_ip(request: Request) -> str:
+    # Behind a proxy this is the proxy's address unless uvicorn runs with --proxy-headers and
+    # --forwarded-allow-ips set to the trusted proxy; never read X-Forwarded-For directly.
+    return request.client.host if request.client else "unknown"
+
+
+ClientIp = Annotated[str, Depends(get_client_ip)]
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

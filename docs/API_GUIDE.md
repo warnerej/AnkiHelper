@@ -12,6 +12,7 @@ All bodies and responses are JSON. Every endpoint except `/health`, `/auth/signu
 | `POST /auth/signup` | no | `{email, password, username}` (password >= 8 chars; username 3-20 chars of letters, digits, `_`, stored lowercase; 409 if taken) | 201 `{user: {id, email}, tokens \| null, confirmation_required}` |
 | `POST /auth/login` | no | `{email, password}` | `{access_token, refresh_token, token_type, expires_in}` |
 | `POST /auth/refresh` | no | `{refresh_token}` | new `{access_token, refresh_token, token_type, expires_in}` |
+| `POST /auth/forgot-password` | no | `{email}` | 202 with the same message for any email; 429 after 3 per email or 10 per IP in an hour |
 | `GET /auth/me` | yes | | `{id, email}` |
 | `POST /auth/logout` | yes | | 204, ends this session |
 | `DELETE /auth/me` | yes | `{password}` | 204; 403 for a wrong password. Irreversible: deletes the profile, reviews and memberships; owned groups pass to the longest-standing member, or are deleted if empty |
@@ -100,7 +101,7 @@ In this example 2026-01-02 had no reviews, so any stored row for it is removed.
 | 403 | a group member called an owner-only endpoint | don't retry |
 | 404 | no review row for that date; or a group / user that doesn't exist or isn't visible to you | treat as "no data" / "not found" |
 | 409 | group conflict: owner leaving, group or allowed-list limit reached, transfer target hasn't joined | show the message, don't retry |
-| 429 | too many failed `POST /groups/join` attempts, or more than 5 `PUT /reviews/history` uploads in an hour | stop; wait up to an hour |
+| 429 | too many failed `POST /groups/join` attempts, more than 5 `PUT /reviews/history` uploads in an hour, or too many `POST /auth/forgot-password` requests | stop; wait up to an hour |
 | 422 | body or query failed validation (negative total, bad or missing date, short password) | fix the request, don't retry unchanged |
 | 502 | the database call failed | retry later with backoff |
 

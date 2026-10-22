@@ -14,6 +14,9 @@ JOIN_WINDOW_MINUTES = 60
 HISTORY_MAX_DAYS = 365
 HISTORY_SYNC_MAX_PER_HOUR = 5
 HISTORY_FUTURE_SLACK_DAYS = 1
+# Password reset requests allowed per window (0009_password_reset_rate_limit.sql); mirrored there.
+RESET_MAX_PER_IP_PER_HOUR = 10
+RESET_MAX_PER_EMAIL_PER_HOUR = 3
 
 
 class Settings(BaseSettings):
@@ -21,6 +24,9 @@ class Settings(BaseSettings):
 
     supabase_url: str
     supabase_key: str  # anon/public key; user access is enforced by RLS
+    # Page on the site that reads the recovery token and sets a new password. Must also be in
+    # the Supabase project's Redirect URLs allowlist.
+    password_reset_redirect_url: str
 
 
 @lru_cache

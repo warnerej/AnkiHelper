@@ -48,6 +48,13 @@ class FakeAuth:
         self.get_user(token)
 
     deleted = False
+    limited = False
+    reset_calls = []
+
+    def request_password_reset(self, email, ip):
+        if self.limited:
+            raise HTTPException(429, "Too many reset requests; try again later")
+        self.reset_calls.append((email, ip))
 
     def delete_account(self, user, password):
         if password != CREDS["password"]:
@@ -154,3 +161,21 @@ def test_delete_account_requires_token_and_body(client, fake):
     assert client.request("DELETE", "/auth/me", headers=bad, json=body).status_code == 401
     assert client.request("DELETE", "/auth/me", headers=AUTH).status_code == 422
     assert not fake.deleted
+
+
+def test_forgot_password_same_response_for_any_email(client, fake):
+    fake.reset_calls = []
+    a = client.post("/auth/forgot-password", json={"email": "a@example.com"})
+    b = client.post("/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert a.status_code == b.status_code == 202
+    assert a.json() == b.json()
+    assert [c[0] for c in fake.reset_calls] == ["a@example.com", "nobody@example.com"]
+
+
+def test_forgot_password_rate_limited(client, fake):
+    fake.limited = True
+    assert client.post("/auth/forgot-password", json={"email": "a@example.com"}).status_code == 429
+
+
+def test_forgot_password_bad_email(client):
+    assert client.post("/auth/forgot-password", json={"email": "nope"}).status_code == 422

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Response, status
 
-from app.dependencies import AuthServiceDep, CurrentUser, TokenDep
+from app.dependencies import AuthServiceDep, ClientIp, CurrentUser, TokenDep
 from app.models.auth import (
     Credentials,
     DeleteAccountRequest,
+    ForgotPasswordRequest,
+    MessageResponse,
     RefreshRequest,
     SignupRequest,
     SignupResponse,
@@ -22,6 +24,16 @@ def signup(body: SignupRequest, auth: AuthServiceDep):
 @router.post("/login", response_model=TokenResponse)
 def login(body: Credentials, auth: AuthServiceDep):
     return auth.login(body.email, body.password)
+
+
+@router.post(
+    "/forgot-password", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED
+)
+def forgot_password(body: ForgotPasswordRequest, auth: AuthServiceDep, ip: ClientIp):
+    auth.request_password_reset(body.email, ip)
+    return MessageResponse(
+        detail="If an account exists for that email, a reset link has been sent."
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)

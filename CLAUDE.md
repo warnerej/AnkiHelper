@@ -14,13 +14,15 @@ Groups live under `/groups` (`supabase/migrations/0004_groups.sql`): an owner, a
 
 `DELETE /auth/me` (password re-checked by a fresh sign-in) calls `delete_my_account()` (`0007`): each owned group goes to its longest-standing member (earliest `joined_at`) or is deleted if it has no other members, the username leaves all allowed lists, then the `auth.users` row is deleted and the rest cascades. `groups.owner_id` has no cascade, hence the hand-off first. Account data is deleted for real; nothing is retained server-side.
 
+`POST /auth/forgot-password` (`0009`) emails a Supabase reset link to `PASSWORD_RESET_REDIRECT_URL` (a page on the site, also in the Supabase redirect allowlist) and always returns the same 202; it is limited to 3/email and 10/IP per hour by `check_password_reset_limit` (anon-callable, stores an email hash only; mirrored in `app/config.py`). The client IP is `request.client.host`, so run uvicorn with `--proxy-headers --forwarded-allow-ips` behind a proxy. The site sets the new password via supabase-js; no backend endpoint.
+
 `groups.plan` exists but isn't enforced. `GET /profiles/{username}/reviews` is deprecated and now returns 404 unless both users joined a common group (`0005`).
 
 `PUT /reviews/history` (`0008`) replaces the caller's `daily_reviews` rows in a date range (max 365 days) in one transaction via `replace_daily_reviews`, rate limited to 5 uploads per hour (`history_syncs`); `profiles.history_synced_at` (read by `GET /reviews/history/status`) tells the add-on whether to run its automatic backfill. Limits are mirrored in `app/config.py`.
 
 ## Stack and commands
 
-Migrations in `supabase/migrations/` (`0001`-`0008`) are applied by hand in Supabase, in order. Don't edit an applied one; add the next number.
+Migrations in `supabase/migrations/` (`0001`-`0009`) are applied by hand in Supabase, in order. Don't edit an applied one; add the next number.
 
 Python 3.14 project managed with `uv` (`pyproject.toml`, `uv.lock`). Dependencies: FastAPI, uvicorn, pydantic-settings, supabase.
 

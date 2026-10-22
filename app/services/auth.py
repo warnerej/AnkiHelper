@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
 from supabase import Client
 from supabase_auth.errors import AuthApiError, AuthError
 
 from app.models.auth import SignupResponse, TokenResponse, UserResponse
+
+logger = logging.getLogger(__name__)
 
 
 def _tokens(session) -> TokenResponse:
@@ -30,8 +34,9 @@ class AuthService:
     """Thin wrapper over Supabase Auth. Expects a client used for one request only,
     since the client keeps the signed-in session in memory."""
 
-    def __init__(self, client: Client):
+    def __init__(self, client: Client, reset_redirect_url: str = ""):
         self._client = client
+        self._reset_redirect_url = reset_redirect_url
         self._auth = client.auth
 
     def _username_taken(self) -> HTTPException:
@@ -74,6 +79,27 @@ class AuthService:
         except AuthApiError as e:
             raise _unauthorized("Invalid email or password") from e
         return _tokens(res.session)
+
+    def request_password_reset(self, email: str, ip: str) -> None:
+        """Send a reset email. Every outcome except the rate limit looks the same to the caller,
+        so this can't be used to find out which emails have accounts."""
+        try:
+            allowed = self._client.rpc(
+                "check_password_reset_limit", {"p_ip": ip, "p_email": email}
+            ).execute()
+        except APIError as e:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, e.message or "database error") from e
+        if not allowed.data:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS, "Too many reset requests; try again later"
+            )
+        try:
+            self._auth.reset_password_for_email(
+                email, {"redirect_to": self._reset_redirect_url}
+            )
+        except AuthError:
+            # Unknown email, Supabase's own throttling or a mail failure: don't tell the caller.
+            logger.warning("password reset email not sent", exc_info=True)
 
     def refresh(self, refresh_token: str) -> TokenResponse:
         try:

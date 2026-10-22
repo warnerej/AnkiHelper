@@ -15,12 +15,20 @@ class SignupRequest(Credentials):
         return v.lower()
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
 class DeleteAccountRequest(BaseModel):
     password: str
 
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class MessageResponse(BaseModel):
+    detail: str
 
 
 class TokenResponse(BaseModel):
