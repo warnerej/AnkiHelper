@@ -103,7 +103,7 @@ In this example 2026-01-02 had no reviews, so any stored row for it is removed.
 | 409 | group conflict: owner leaving, group or allowed-list limit reached, transfer target hasn't joined | show the message, don't retry |
 | 429 | too many failed `POST /groups/join` attempts, more than 5 `PUT /reviews/history` uploads in an hour, or too many `POST /auth/forgot-password` requests | stop; wait up to an hour |
 | 422 | body or query failed validation (negative total, bad or missing date, short password) | fix the request, don't retry unchanged |
-| 502 | the database call failed | retry later with backoff |
+| 502 | the database call failed; for `/auth/refresh`, the auth provider failed or throttled (rate limit, timeout, 5xx) | retry later with backoff; the add-on keeps the session |
 
 ## Extending the backend
 

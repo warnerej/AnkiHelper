@@ -9,6 +9,10 @@ from app.models.auth import SignupResponse, TokenResponse, UserResponse
 
 logger = logging.getLogger(__name__)
 
+# Refresh failures where Supabase definitively rejected the token; anything else
+# (429, 408, 5xx, ...) is transient and must not end the user's session.
+_DEFINITIVE_REFRESH_STATUSES = frozenset({400, 401, 403, 404, 422})
+
 
 def _tokens(session) -> TokenResponse:
     return TokenResponse(
@@ -117,8 +121,9 @@ class AuthService:
                 e.message,
             )
             # Only a definitive rejection is a 401 (the client then drops the session);
-            # network and 5xx failures are retryable and must not log the user out.
-            if not isinstance(e, AuthApiError) or (e.status or 0) >= 500:
+            # network, 5xx, rate-limit (429) and timeout (408) failures are retryable
+            # and must not log the user out.
+            if not isinstance(e, AuthApiError) or e.status not in _DEFINITIVE_REFRESH_STATUSES:
                 raise HTTPException(
                     status.HTTP_502_BAD_GATEWAY, "Auth provider unavailable"
                 ) from e

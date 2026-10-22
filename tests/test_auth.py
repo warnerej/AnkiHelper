@@ -1,10 +1,15 @@
+from types import SimpleNamespace
+from typing import Any, cast
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from supabase_auth.errors import AuthApiError, AuthRetryableError
 
 from app.dependencies import get_auth_service
 from app.main import app
 from app.models.auth import SignupResponse, TokenResponse, UserResponse
+from app.services.auth import AuthService
 
 TOKENS = TokenResponse(access_token="acc", refresh_token="ref", expires_in=3600)
 USER = UserResponse(id="u1", email="a@example.com")
@@ -201,34 +206,28 @@ def test_request_password_reset_unavailable_without_redirect_url():
 
 
 def _refresh_status(error, caplog):
-    from types import SimpleNamespace
-
-    from app.services.auth import AuthService
-
     def refresh_session(token):
         raise error
 
-    with caplog.at_level("WARNING"):
-        with pytest.raises(HTTPException) as e:
-            AuthService(SimpleNamespace(auth=SimpleNamespace(refresh_session=refresh_session))).refresh(
-                "secret-refresh-token"
-            )
+    service = AuthService(cast(Any, SimpleNamespace(auth=SimpleNamespace(refresh_session=refresh_session))))
+    with caplog.at_level("WARNING"), pytest.raises(HTTPException) as e:
+        service.refresh("secret-refresh-token")
     assert "secret-refresh-token" not in caplog.text
     return e.value.status_code
 
 
 def test_refresh_definitive_rejection_is_401(caplog):
-    from supabase_auth.errors import AuthApiError
-
-    err = AuthApiError("Already Used", 400, "refresh_token_already_used")
+    err = AuthApiError("Already Used", 400, cast(Any, "refresh_token_already_used"))
     assert _refresh_status(err, caplog) == 401
     assert "refresh_token_already_used" in caplog.text
 
 
 def test_refresh_transient_failure_is_502(caplog):
-    from supabase_auth.errors import AuthRetryableError
-
     assert _refresh_status(AuthRetryableError("timeout", 0), caplog) == 502
-    from supabase_auth.errors import AuthApiError
-
     assert _refresh_status(AuthApiError("boom", 503, None), caplog) == 502
+
+
+@pytest.mark.parametrize(("status", "code"), [(429, "over_request_rate_limit"), (408, None)])
+def test_refresh_rate_limit_or_timeout_is_502(caplog, status, code):
+    err = AuthApiError("slow down", status, cast(Any, code))
+    assert _refresh_status(err, caplog) == 502
