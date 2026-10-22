@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from postgrest.exceptions import APIError
@@ -23,8 +23,8 @@ class ProfileService:
     def friend_reviews(
         self, username: str, days: int = DEFAULT_WINDOW_DAYS
     ) -> FriendReviews:
-        # The server has no timezone logic (clients own study_date), so "today" is the server's.
-        end = date.today()
+        # Clients own study_date, so "today" is UTC's; the query runs a day past it (see groups).
+        end = datetime.now(timezone.utc).date()
         start = end - timedelta(days=days - 1)
         username = username.lower()
         try:
@@ -41,7 +41,7 @@ class ProfileService:
                 {
                     "p_user_id": profile.data[0]["user_id"],
                     "p_start": start.isoformat(),
-                    "p_end": end.isoformat(),
+                    "p_end": (end + timedelta(days=1)).isoformat(),
                 },
             ).execute()
         except APIError as e:

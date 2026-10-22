@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -94,34 +94,27 @@ class GroupService:
         return self.get(group_id)
 
     def reviews(self, group_id: UUID, days: int = DEFAULT_WINDOW_DAYS) -> GroupReviews:
-        # The server has no timezone logic (clients own study_date), so "today" is the server's.
-        end = date.today()
+        # Clients own study_date, so "today" is UTC's. Query one day past it for clients ahead
+        # of UTC, whose Anki day may already be tomorrow (uploads allow that much slack).
+        end = datetime.now(timezone.utc).date()
         start = end - timedelta(days=days - 1)
-        rows = self._rpc(
-            "group_reviews",
+        members = self._rpc(
+            "group_reviews_by_member",
             {
                 "p_group_id": str(group_id),
                 "p_start": start.isoformat(),
-                "p_end": end.isoformat(),
+                "p_end": (end + timedelta(days=1)).isoformat(),
             },
         )
-        # The function returns one row per member-day, plus a null-date row for members
-        # with no data in the window, so every member appears even with `days: []`.
-        by_user: dict[str, list[FriendDailyReview]] = {}
-        for r in rows:
-            days_list = by_user.setdefault(r["username"], [])
-            if r["study_date"] is not None:
-                days_list.append(
-                    FriendDailyReview(
-                        study_date=r["study_date"],
-                        total_reviews=r["total_reviews"],
-                        retention=r["retention"],
-                        study_minutes=r["study_minutes"],
-                    )
-                )
+        # One element per joined member, so every member appears even with `days: []`.
         return GroupReviews(
             group_id=group_id,
             start=start,
             end=end,
-            members=[MemberReviews(username=u, days=d) for u, d in by_user.items()],
+            members=[
+                MemberReviews(
+                    username=m["username"], days=[FriendDailyReview(**d) for d in m["days"]]
+                )
+                for m in members
+            ],
         )

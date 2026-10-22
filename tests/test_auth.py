@@ -231,3 +231,43 @@ def test_refresh_transient_failure_is_502(caplog):
 def test_refresh_rate_limit_or_timeout_is_502(caplog, status, code):
     err = AuthApiError("slow down", status, cast(Any, code))
     assert _refresh_status(err, caplog) == 502
+
+
+def _service_status(method, error, *args):
+    def raiser(*a, **k):
+        raise error
+
+    auth = SimpleNamespace(sign_in_with_password=raiser, get_user=raiser)
+    service = AuthService(cast(Any, SimpleNamespace(auth=auth)))
+    with pytest.raises(HTTPException) as e:
+        getattr(service, method)(*args)
+    return e.value.status_code
+
+
+def test_login_bad_credentials_is_401_but_transient_is_502():
+    bad = AuthApiError("Invalid login", 400, cast(Any, "invalid_credentials"))
+    assert _service_status("login", bad, "a@example.com", "pw") == 401
+    for err in (AuthApiError("slow down", 429, None), AuthRetryableError("timeout", 0)):
+        assert _service_status("login", err, "a@example.com", "pw") == 502
+
+
+def test_get_user_rejected_token_is_401_but_transient_is_502():
+    assert _service_status("get_user", AuthApiError("bad jwt", 403, None), "tok") == 401
+    assert _service_status("get_user", AuthApiError("boom", 503, None), "tok") == 502
+    assert _service_status("get_user", AuthRetryableError("timeout", 0), "tok") == 502
+
+
+def test_network_error_to_supabase_is_502():
+    import httpx
+
+    from app.dependencies import get_current_user
+
+    def boom():
+        raise httpx.ConnectTimeout("timed out")
+
+    app.dependency_overrides[get_current_user] = boom
+    try:
+        res = TestClient(app, raise_server_exceptions=False).get("/auth/me")
+    finally:
+        app.dependency_overrides.clear()
+    assert res.status_code == 502

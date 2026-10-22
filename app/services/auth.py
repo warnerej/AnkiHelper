@@ -9,8 +9,8 @@ from app.models.auth import SignupResponse, TokenResponse, UserResponse
 
 logger = logging.getLogger(__name__)
 
-# Refresh failures where Supabase definitively rejected the token; anything else
-# (429, 408, 5xx, ...) is transient and must not end the user's session.
+# Failures where Supabase definitively rejected the credentials or token; anything else
+# (429, 408, 5xx, network, ...) is transient and must not end the user's session.
 _DEFINITIVE_REFRESH_STATUSES = frozenset({400, 401, 403, 404, 422})
 
 
@@ -32,6 +32,14 @@ def _unauthorized(detail: str) -> HTTPException:
         detail,
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _is_definitive(e: AuthError) -> bool:
+    return isinstance(e, AuthApiError) and e.status in _DEFINITIVE_REFRESH_STATUSES
+
+
+def _unavailable(e: AuthError) -> HTTPException:
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, "Auth provider unavailable")
 
 
 class AuthService:
@@ -80,7 +88,9 @@ class AuthService:
     def login(self, email: str, password: str) -> TokenResponse:
         try:
             res = self._auth.sign_in_with_password({"email": email, "password": password})
-        except AuthApiError as e:
+        except AuthError as e:
+            if not _is_definitive(e):
+                raise _unavailable(e) from e
             raise _unauthorized("Invalid email or password") from e
         return _tokens(res.session)
 
@@ -123,10 +133,8 @@ class AuthService:
             # Only a definitive rejection is a 401 (the client then drops the session);
             # network, 5xx, rate-limit (429) and timeout (408) failures are retryable
             # and must not log the user out.
-            if not isinstance(e, AuthApiError) or e.status not in _DEFINITIVE_REFRESH_STATUSES:
-                raise HTTPException(
-                    status.HTTP_502_BAD_GATEWAY, "Auth provider unavailable"
-                ) from e
+            if not _is_definitive(e):
+                raise _unavailable(e) from e
             raise _unauthorized("Invalid or expired refresh token") from e
         if res.session is None:
             logger.warning("refresh returned no session")
@@ -137,6 +145,8 @@ class AuthService:
         try:
             res = self._auth.get_user(token)
         except AuthError as e:
+            if not _is_definitive(e):
+                raise _unavailable(e) from e
             raise _unauthorized("Invalid or expired token") from e
         if res is None or res.user is None:
             raise _unauthorized("Invalid or expired token")

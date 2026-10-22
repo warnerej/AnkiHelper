@@ -430,12 +430,11 @@ def test_service_maps_db_errors(token, code):
 
 
 def test_service_groups_review_rows_by_member():
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     rows = [
-        {"username": "alice", "study_date": today, "total_reviews": 3, "retention": None,
-         "study_minutes": 1.5},
-        {"username": "bob", "study_date": None, "total_reviews": None, "retention": None,
-         "study_minutes": None},
+        {"username": "alice", "days": [
+            {"study_date": today, "total_reviews": 3, "retention": None, "study_minutes": 1.5}]},
+        {"username": "bob", "days": []},
     ]
     stub = StubClient(data=rows)
     gid = UUID(int=1)
@@ -443,9 +442,12 @@ def test_service_groups_review_rows_by_member():
     assert [(m.username, len(m.days)) for m in out.members] == [("alice", 1), ("bob", 0)]
     assert out.members[0].days[0].study_minutes == 1.5
     fn, params = stub.calls[0]
-    assert fn == "group_reviews" and params["p_group_id"] == str(gid)
-    span = date.fromisoformat(params["p_end"]) - date.fromisoformat(params["p_start"])
-    assert span == timedelta(days=6)
+    assert fn == "group_reviews_by_member" and params["p_group_id"] == str(gid)
+    # The window runs a day past the reported end for clients ahead of UTC.
+    assert date.fromisoformat(params["p_end"]) - out.end == timedelta(days=1)
+    assert date.fromisoformat(params["p_end"]) - date.fromisoformat(params["p_start"]) == timedelta(
+        days=7
+    )
 
 
 def test_service_join_null_result_is_404():
